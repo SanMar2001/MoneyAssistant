@@ -4,13 +4,32 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.dependencies import get_current_user, require_role
 from backend.core.database import get_db
+from backend.core.roles import UserRole
 from backend.exceptions.user import EmailAlreadyExistsError
+from backend.models.user import User
 from backend.schemas.common import ApiResponse
 from backend.schemas.user import UserCreate, UserResponse
 from backend.services.user_service import create_user, delete_user, get_users
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.get("/me")
+async def get_me(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return {
+        "status": status.HTTP_200_OK,
+        "body": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "role": current_user.role,
+            "active": current_user.active,
+        },
+    }
 
 
 @router.post(
@@ -21,6 +40,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 async def create_user_endpoint(
     user_data: UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_role(UserRole.ADMIN))],
 ):
     try:
         user = await create_user(db, user_data)
